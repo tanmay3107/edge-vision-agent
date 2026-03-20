@@ -13,7 +13,8 @@ revision = "2025-01-09" # The new, updated architecture
 moondream = AutoModelForCausalLM.from_pretrained(
     model_id, 
     trust_remote_code=True, 
-    revision=revision
+    revision=revision,
+    device_map={"": "cuda"} 
 )
 
 # 2. Create a Dummy Image (A red square)
