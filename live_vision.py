@@ -6,73 +6,74 @@ import time
 
 print("🧠 Booting up Edge Vision Agent...")
 
-# 1. Load model with float16 for massive speedup on RTX 3050 Ti
+# 1. Load model with float16 for massive speedup
 model_id = "vikhyatk/moondream2"
 moondream = AutoModelForCausalLM.from_pretrained(
     model_id,
     trust_remote_code=True,
     revision="2025-01-09",
-    torch_dtype=torch.float16, # 🚀 SPEED BOOST MAGIC
+    torch_dtype=torch.float16,
     device_map={"": "cuda"}
 )
 
 # 2. Open the Webcam
-cap = cv2.VideoCapture(0) # '0' is usually your default laptop camera
+cap = cv2.VideoCapture(0)
 
 if not cap.isOpened():
     print("❌ Error: Could not open webcam.")
     exit()
 
-# Give the Agent a Mission
-MISSION_PROMPT = "Is there a smartphone or cell phone in this image? Answer only YES or NO."
-
-print("🎥 Security Webcam active!")
-print(f"🕵️ Agent Mission: {MISSION_PROMPT}")
+print("\n🎥 Security Webcam active!")
+print("🕵️ Agent Mission: Detect phones and describe the scene.")
 print("👉 Press 'SPACEBAR' to scan the area.")
 print("👉 Press 'q' to quit.")
 
-# The Action Function
-def trigger_security_alert():
+# The Action Function (Now accepts the description as evidence!)
+def trigger_security_alert(evidence_description):
     print("🚨 [ALERT] UNAUTHORIZED PHONE DETECTED! 🚨")
-    print("📝 Logging incident to file...")
+    print("📝 Logging incident and evidence to file...")
     with open("security_log.txt", "a") as f:
-        f.write(f"Incident logged at: {time.ctime()} - Phone detected in restricted area.\n")
+        f.write(f"[{time.ctime()}] ALERT: Phone detected.\n")
+        f.write(f"   Context: {evidence_description}\n")
+        f.write("-" * 40 + "\n")
 
 while True:
-    # Read frame from camera
     ret, frame = cap.read()
     if not ret: 
         break
 
-    # Show the camera feed on screen
     cv2.imshow('Edge Vision Agent - Security Mode', frame)
-    
-    # Check for key presses
     key = cv2.waitKey(1) & 0xFF
 
     if key == ord('q'):
-        break # Quit
+        break 
         
-    elif key == 32: # SPACEBAR pressed
+    elif key == 32: # SPACEBAR
         print("\n📸 Scanning area...")
         
-        # OpenCV uses BGR colors, but the AI expects RGB. We must convert it!
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(rgb_frame)
 
         start_time = time.time()
         
-        # We use a strict prompt to force a binary decision
-        result = moondream.query(pil_image, MISSION_PROMPT)
-        answer = result['answer'].strip().upper()
+        # Query 1: Get the general description
+        print("🔍 Generating scene description...")
+        desc_result = moondream.query(pil_image, "Describe what you see in this image in one short sentence.")
+        description = desc_result['answer'].strip()
+
+        # Query 2: Get the strict YES/NO decision
+        print("🕵️ Checking for unauthorized devices...")
+        sec_result = moondream.query(pil_image, "Is there a smartphone or cell phone in this image? Answer only YES or NO.")
+        decision = sec_result['answer'].strip().upper()
         
         end_time = time.time()
 
-        print(f"🤖 Agent Decision: {answer} (Took {end_time - start_time:.2f}s)")
+        print(f"\n👁️  Scene: {description}")
+        print(f"🤖 Agent Decision: {decision} (Total time: {end_time - start_time:.2f}s)")
 
         # The Agent's "Brain" - Deciding to take action
-        if "YES" in answer:
-            trigger_security_alert()
+        if "YES" in decision:
+            trigger_security_alert(description)
         else:
             print("✅ Area clear. No action taken.")
 
