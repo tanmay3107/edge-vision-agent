@@ -12,7 +12,7 @@ moondream = AutoModelForCausalLM.from_pretrained(
     model_id,
     trust_remote_code=True,
     revision="2025-01-09",
-    torch_dtype=torch.float16, # <--- 🚀 SPEED BOOST MAGIC
+    torch_dtype=torch.float16, # 🚀 SPEED BOOST MAGIC
     device_map={"": "cuda"}
 )
 
@@ -23,18 +23,29 @@ if not cap.isOpened():
     print("❌ Error: Could not open webcam.")
     exit()
 
-print("🎥 Webcam active!")
-print("👉 Press 'SPACEBAR' to analyze the current frame.")
+# Give the Agent a Mission
+MISSION_PROMPT = "Is there a smartphone or cell phone in this image? Answer only YES or NO."
+
+print("🎥 Security Webcam active!")
+print(f"🕵️ Agent Mission: {MISSION_PROMPT}")
+print("👉 Press 'SPACEBAR' to scan the area.")
 print("👉 Press 'q' to quit.")
+
+# The Action Function
+def trigger_security_alert():
+    print("🚨 [ALERT] UNAUTHORIZED PHONE DETECTED! 🚨")
+    print("📝 Logging incident to file...")
+    with open("security_log.txt", "a") as f:
+        f.write(f"Incident logged at: {time.ctime()} - Phone detected in restricted area.\n")
 
 while True:
     # Read frame from camera
     ret, frame = cap.read()
-    if not ret:
+    if not ret: 
         break
 
     # Show the camera feed on screen
-    cv2.imshow('Edge Vision Agent', frame)
+    cv2.imshow('Edge Vision Agent - Security Mode', frame)
     
     # Check for key presses
     key = cv2.waitKey(1) & 0xFF
@@ -43,21 +54,27 @@ while True:
         break # Quit
         
     elif key == 32: # SPACEBAR pressed
-        print("\n👀 Snapped a photo! Analyzing...")
+        print("\n📸 Scanning area...")
         
         # OpenCV uses BGR colors, but the AI expects RGB. We must convert it!
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(rgb_frame)
 
-        # Ask the AI what it sees
-        prompt = "Describe what you see in this image in one short sentence."
-        
         start_time = time.time()
-        result = moondream.query(pil_image, prompt)
+        
+        # We use a strict prompt to force a binary decision
+        result = moondream.query(pil_image, MISSION_PROMPT)
+        answer = result['answer'].strip().upper()
+        
         end_time = time.time()
 
-        print(f"🤖 Agent: {result['answer']}")
-        print(f"⏱️ Speed: {end_time - start_time:.2f} seconds")
+        print(f"🤖 Agent Decision: {answer} (Took {end_time - start_time:.2f}s)")
+
+        # The Agent's "Brain" - Deciding to take action
+        if "YES" in answer:
+            trigger_security_alert()
+        else:
+            print("✅ Area clear. No action taken.")
 
 # Cleanup
 cap.release()
