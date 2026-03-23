@@ -1,0 +1,4 @@
+Incident logged at: Sun Mar 22 18:26:32 2026 - Phone detected in restricted area.
+[Sun Mar 22 18:31:01 2026] ALERT: Phone detected.
+   Context: A person holds a black phone displaying the word "DEADLY" and a picture of a man's face, with a serious expression.
+----------------------------------------
