@@ -1,10 +1,19 @@
+# live_vision.py
 import cv2
 import torch
+import time
+import os
 from transformers import AutoModelForCausalLM
 from PIL import Image
-import time
+
+# Import our new database layer
+from database import SessionLocal, ThreatLog
 
 print("🧠 Booting up Edge Vision Agent...")
+
+# Ensure the evidence directory exists
+EVIDENCE_DIR = "captured_frames"
+os.makedirs(EVIDENCE_DIR, exist_ok=True)
 
 # 1. Load model with float16 for massive speedup
 model_id = "vikhyatk/moondream2"
@@ -28,14 +37,32 @@ print("🕵️ Agent Mission: Detect phones and describe the scene.")
 print("👉 Press 'SPACEBAR' to scan the area.")
 print("👉 Press 'q' to quit.")
 
-# The Action Function (Now accepts the description as evidence!)
-def trigger_security_alert(evidence_description):
+# Open a database session
+db = SessionLocal()
+
+# The Action Function (Upgraded to use SQLite and save images)
+def trigger_security_alert(evidence_description, frame_to_save):
     print("🚨 [ALERT] UNAUTHORIZED PHONE DETECTED! 🚨")
-    print("📝 Logging incident and evidence to file...")
-    with open("security_log.txt", "a") as f:
-        f.write(f"[{time.ctime()}] ALERT: Phone detected.\n")
-        f.write(f"   Context: {evidence_description}\n")
-        f.write("-" * 40 + "\n")
+    
+    # 1. Save the visual evidence
+    timestamp_str = time.strftime("%Y%m%d-%H%M%S")
+    image_filename = f"threat_{timestamp_str}.jpg"
+    image_filepath = os.path.join(EVIDENCE_DIR, image_filename)
+    cv2.imwrite(image_filepath, frame_to_save)
+    
+    # 2. Log to Database
+    print("📝 Committing incident and evidence to SQLite database...")
+    new_log = ThreatLog(
+        threat_type="phone",
+        is_threat=True,
+        context_string=evidence_description,
+        image_path=image_filepath
+    )
+    
+    db.add(new_log)
+    db.commit()
+    print("✅ Database commit successful.")
+    print("-" * 40)
 
 while True:
     ret, frame = cap.read()
@@ -73,10 +100,12 @@ while True:
 
         # The Agent's "Brain" - Deciding to take action
         if "YES" in decision:
-            trigger_security_alert(description)
+            # Pass both the description and the raw frame to the alert function
+            trigger_security_alert(description, frame)
         else:
             print("✅ Area clear. No action taken.")
 
 # Cleanup
+db.close()
 cap.release()
 cv2.destroyAllWindows()
