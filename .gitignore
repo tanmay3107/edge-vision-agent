@@ -1,0 +1,13 @@
+# Ignore the SQLite database
+*.db
+*.sqlite3
+
+# Ignore the saved evidence images
+captured_frames/
+
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Ignore environment variables (if you ever add API keys later)
+.env
