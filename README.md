@@ -1,97 +1,109 @@
 # EdgeVision Security Agent 👁️🛡️
 
 ![Python](https://img.shields.io/badge/Python-3.10-blue)
+![Architecture](https://img.shields.io/badge/Architecture-Decoupled_Microservice-orange)
 ![Model](https://img.shields.io/badge/Model-Moondream2_VLM-purple)
 ![Hardware](https://img.shields.io/badge/Optimized_For-4GB_VRAM-green)
-![Privacy](https://img.shields.io/badge/Privacy-100%25_Offline-red)
+![Deployment](https://img.shields.io/badge/Deployment-Docker-2496ED)
 
-An autonomous, multimodal security agent that runs entirely offline on consumer edge hardware. By combining a Vision-Language Model (VLM) with live computer vision (OpenCV), this agent monitors a physical space, detects unauthorized devices (e.g., smartphones), and generates highly descriptive, context-aware audit logs.
+An autonomous, multimodal edge security pipeline designed to run entirely offline. EdgeVision decouples computer vision motion detection from a heavy Vision-Language Model (VLM) inference engine. It detects physical intrusions, analyzes the scene contextually, and persists visual evidence to a local relational database.
 
-
-
----
-
-## 🚀 The Problem & Solution
-
-* **The Problem:** Traditional security cameras rely on basic motion detection (triggering false alarms) or send sensitive video feeds to cloud APIs for analysis (violating privacy).
-* **The Solution:** EdgeVision brings the reasoning capabilities of a Large Language Model directly to the camera. It processes frames locally, understands the context of the scene, and logs specific threats without a single pixel leaving the device.
+**Author:** Tanmay Janak
 
 ---
 
-## ✨ Key Features
+## 🚀 System Architecture
 
-1.  **Dual-Query Reasoning:** The agent doesn't just return "YES" or "NO". It runs two parallel queries on the same frame:
-    * *Query 1:* Analyzes the scene and generates a descriptive string.
-    * *Query 2:* Performs strict binary classification for the security threat.
-2.  **Context-Aware Logging:** Security events are logged to a local `.txt` file along with the AI-generated context of the suspect/scene.
-3.  **FP16 Hardware Optimization:** The model is optimized using `torch.float16` and the `accelerate` library, allowing a 2-billion parameter VLM to run smoothly on a standard 4GB VRAM GPU (NVIDIA RTX 3050 Ti).
+Unlike traditional monolithic scripts, EdgeVision utilizes a **Client-Server Microservice Architecture**:
+1. **The Edge Client (`edge_client.py`):** A lightweight OpenCV script that monitors a webcam feed for physical motion. When movement is detected, it captures a frame, encodes it, and sends it via HTTP POST.
+2. **The Inference API (`server.py`):** A FastAPI backend that hosts a 2-billion parameter VLM (Moondream2). It receives frames, runs dual-query analysis (scene description + threat classification), and logs incidents.
+3. **The Data Layer (`database.py`):** An SQLAlchemy-managed SQLite database that persistently stores event timestamps, AI-generated context strings, and file paths to saved visual evidence.
+
+---
+
+## ✨ Key Engineering Features
+
+* **Decoupled Deployment:** The camera client and the AI server operate independently, allowing the camera to run on low-power IoT devices while the server runs on a centralized GPU.
+* **FP16 Hardware Optimization:** The massive VLM is explicitly constrained using `torch.float16` and dynamic device mapping, allowing it to run smoothly on standard consumer hardware (e.g., an NVIDIA RTX 3050 Ti with 4GB VRAM).
+* **Dual-Query Reasoning:** Runs two parallel zero-shot prompts per frame to minimize false positives:
+    * *Query 1:* Contextual scene description.
+    * *Query 2:* Strict binary classification for unauthorized devices/entities.
+* **Evidence Persistence:** Automatically saves the exact frame that triggered the alert to disk, linking the image path directly to the SQLite database entry.
+* **Containerized Backend:** The API and AI engine are fully containerized via Docker for hardware-agnostic deployment.
 
 ---
 
 ## 🛠️ Tech Stack
 
-* **Vision-Language Model:** `vikhyatk/moondream2` (2025-01-09 Architecture)
-* **Computer Vision:** `OpenCV` (Live Webcam Feed Processing)
-* **Deep Learning Framework:** `PyTorch` & `Hugging Face Transformers`
-* **Memory Management:** `Accelerate` (For dynamic GPU offloading)
-* **Image Processing Engine:** `pyvips`
+* **Machine Learning:** `PyTorch`, `Hugging Face Transformers`, `Accelerate`
+* **Vision-Language Model:** `vikhyatk/moondream2` (2025-01-09 Revision)
+* **Backend Framework:** `FastAPI`, `Uvicorn`, `Pydantic`
+* **Database:** `SQLite`, `SQLAlchemy` (ORM)
+* **Computer Vision:** `OpenCV` (Motion Detection & Frame Processing)
+* **DevOps:** `Docker`
 
 ---
 
-## 📂 Project Structure
+## 📂 Repository Structure
 
 ```text
 edge-vision-agent/
-├── live_vision.py         # Main application script (Webcam + Agent Logic)
-├── security_log.txt       # Auto-generated audit trail for detected threats
-└── README.md              # Project documentation
+├── captured_frames/       # Directory generated at runtime to store visual evidence
+├── database.py            # SQLAlchemy ORM schemas and DB initialization
+├── Dockerfile             # Container configuration for the AI Server
+├── edge_client.py         # Lightweight OpenCV motion detector and API caller
+├── requirements.txt       # Python dependencies
+└── server.py              # FastAPI application and Moondream2 inference logic
 ```
 
 ---
 
-## 💻 Installation & Setup
+## 💻 Local Setup & Execution
 
 ### Prerequisites
-* Anaconda (Python 3.10+)
 * NVIDIA GPU (Minimum 4GB VRAM) with CUDA installed.
+* Python 3.10+
 
-### 1. Create the Environment
+### 1. Install Dependencies
 ```bash
-conda create -n vision-agent python=3.10 -y
-conda activate vision-agent
+pip install -r requirements.txt
 ```
 
-### 2. Install Dependencies
+### 2. Start the AI Server (Terminal 1)
+Boot up the FastAPI server. This will load the Moondream2 model into your GPU VRAM.
 ```bash
-# Core Machine Learning & Vision Libraries
-pip install torch torchvision transformers pillow opencv-python accelerate
+uvicorn server:app --host 0.0.0.0 --port 8000
+```
+*Wait until the console outputs: `Application startup complete.`*
 
-# Windows-Specific Image Processing Engine (Fixes DLL errors)
-pip install pyvips-binary pyvips
+### 3. Start the Edge Client (Terminal 2)
+In a separate terminal window, launch the lightweight camera client to begin motion tracking.
+```bash
+python edge_client.py
 ```
 
 ---
 
-## 🏃‍♂️ Usage
+## 🐳 Docker Deployment (Server)
 
-Run the main agent script from your terminal:
+To deploy the inference engine in an isolated container with GPU passthrough:
 
+1. Build the Docker image:
 ```bash
-python live_vision.py
+docker build -t edgevision-server .
 ```
 
-### Controls:
-* **`SPACEBAR`**: Triggers the agent to snap a frame, analyze the scene, and evaluate the threat condition.
-* **`q`**: Quits the application and safely releases the webcam.
+2. Run the container (Requires NVIDIA Container Toolkit):
+```bash
+docker run --gpus all -p 8000:8000 edgevision-server
+```
 
 ---
 
-## 📝 Example Output Log (`security_log.txt`)
+## 📝 Example Database Record
 
-When the agent detects an unauthorized device, it automatically generates an audit trail like this:
+When motion triggers an alert, the AI logs a structured record into the `threat_logs` SQLite table:
 
-```text
-[Sun Mar 22 18:31:01 2026] ALERT: Phone detected.
-   Context: A person holds a black phone displaying the word "DEADLY" and a picture of a man's face, with a serious expression.
-----------------------------------------
-```
+| id | timestamp | threat_type | is_threat | context_string | image_path |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | 2026-04-14 18:31:01 | phone | TRUE | A person holds a black phone displaying the word "DEADLY"... | captured_frames/threat_api_20260414-183101.jpg |
